@@ -819,26 +819,6 @@ function createPgMock() {
       return { rows: [row] };
     }
 
-    // listJobs-style query: FROM jobs ... ORDER BY ... (paginated)
-    if (text.includes("FROM jobs") && text.includes("ORDER BY") && !text.includes("WHERE id = $") && !text.includes("WHERE client_address = $1")) {
-      let rows = [...jobs.values()].filter((job) => job.visibility === "public");
-      // Apply cursor-based filtering if present in the SQL
-      if (text.includes("created_at < $")) {
-        // Cursor params are the two params before limit:
-        // params[params.length-3] = decoded.createdAt
-        // params[params.length-2] = decoded.id
-        // params[params.length-1] = limit
-        const cursorCreatedAt = params[params.length - 3];
-        const cursorId = params[params.length - 2];
-        if (cursorCreatedAt && cursorId) {
-          rows = rows.filter((job) => {
-            if (job.created_at < cursorCreatedAt) return true;
-            if (job.created_at === cursorCreatedAt && job.id < cursorId) return true;
-            return false;
-          });
-        }
-      }
-
     // ─── listJobs-style query: FROM jobs ... ORDER BY ... (paginated) ────
     if (
       !text.includes("FROM applications") &&
@@ -884,44 +864,6 @@ function createPgMock() {
         return 0;
       });
       return { rows: rows.slice(0, limit) };
-      if (
-        text.includes("category = $") ||
-        text.includes("c.slug = $") ||
-        text.includes("jobs.category = $")
-      ) {
-        const catParam = params.find(
-          (p) =>
-            typeof p === "string" &&
-            (DEFAULT_CATEGORIES.some(
-              (c) =>
-                c.name.toLowerCase() === p.toLowerCase() ||
-                c.slug.toLowerCase() === p.toLowerCase(),
-            ) ||
-              [...jobs.values()].some((j) => j.category === p)),
-        );
-        if (catParam) {
-          rows = rows.filter(
-            (job) =>
-              (job.category &&
-                job.category.toLowerCase() === catParam.toLowerCase()) ||
-              (job.category_slug &&
-                job.category_slug.toLowerCase() === catParam.toLowerCase()) ||
-              DEFAULT_CATEGORIES.some(
-                (c) =>
-                  (c.slug === catParam.toLowerCase() ||
-                    c.name.toLowerCase() === catParam.toLowerCase()) &&
-                  job.category &&
-                  job.category.toLowerCase() === c.name.toLowerCase(),
-              ),
-          );
-        }
-      }
-      const limitVal = params[params.length - 1] ?? 50;
-      return {
-        rows: rows
-          .slice(0, typeof limitVal === "number" ? limitVal : 50)
-          .map(formatJobRow),
-      };
     }
 
     // Job invitations check
@@ -1337,7 +1279,6 @@ function createPgMock() {
     }
 
     return { rows: [] };
-  }
   });
 
   const connect = jest.fn(async () => ({
@@ -1405,5 +1346,3 @@ module.exports = {
   defaultOnboardingRow,
   defaultPriceAlertRow,
 };
-
-}
